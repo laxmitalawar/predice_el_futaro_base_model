@@ -1,1 +1,202 @@
 # predice_el_futaro_base_model
+
+Import Libraries
+
+import pandas as pd
+import numpy as np
+import pandas as pd
+import os
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.metrics import r2_score,mean_absolute_error,median_absolute_error,mean_squared_error,mean_squared_log_error
+from scipy.optimize import minimize
+import statsmodels.tsa.api as smt
+import statsmodels.api as sm
+from tqdm import tqdm_notebook
+from itertools import product
+def mean_absolute_percentage_error(y_true,y_pred):
+    return np.mean(np.abs(((y_true-y_pred)/y_true)))*100
+import warnings
+warnings.filterwarnings('ignore')
+%matplotlib inline
+
+READ THE DATA
+
+Data=pd.read_csv('../input/predice-el-futuro/train_csv.csv')
+Data.head()
+
+
+Data.info()
+
+1.train data consists total 80 rows, and 3 columns.
+
+2.Id = int type,can be drop in future.
+
+3.Time = in object type , which should be converted to datetime format.here we have data of every 10 seconds
+
+4.feature= float type. feature is the target column in our data,consists values at particular time.
+
+Summary
+we have time series data , which is going to be an univatiate analysis due to one one target feature with respect to time.
+Let us understand what is time series data and what are the types.
+
+In the field for machine learning and data science, most of the real-life problems are based upon the prediction of future which is totally oblivious to us such as stock market prediction, future sales prediction and so on.Time series problem is basically the prediction of such problems using various machine learning tools.Time series problem is tackled efficiently when first it is analyzed properly (Time Series Analysis) and according to that observation suitable algorithm is used (Time Series Forecasting).
+
+# Time Series Analysis
+
+
+Data analysis is an very imporant step,it gives us a brief understanding of the data and a very strange but intriguing confidence about our prediction model.
+Time series analysis is not different.But time series problems have very special orientation when it comes to analysis.But before we move into that,will look into some characteristics of Time Series Data.
+
+Trend:- As the name suggests trend depicts the variation in the output as time increases.It is often non-linear. Sometimes we will refer to trend as “changing direction” when it might go from an increasing trend to a decreasing trend.
+
+Level:- It basically depicts baseline value for the time series.
+
+Seasonal:- As its name depicts it shows the repeated pattern over time. In layman terms, it shows the seasonal variation of data over time.
+
+Statinarity :- Stationarity is an important characteristic of time series. A time series is said to be stationary if its statistical properties do not change over time. In other words, it has constant mean and variance, and covariance is independent of time.
+
+Noise:- It is basically external noises that vary the data randomly.
+
+You can see below various graphs I plotted and what I inferred from them. which is totally oblivious to us such as stock market prediction, future sales prediction and so on.Time series problem is basically the prediction of such problems using various machine learning tools.Time series problem is tackled efficiently when first it is analyzed properly (Time Series Analysis) and according to that observation suitable algorithm is used (Time Series Forecasting).We'll study both of then later in this notebook.
+
+# Univariate Time Series
+
+ A univariate time series is a sequence of measurements of the same variable collected over time. Most often, the measurements are made at regular time intervals.
+One difference from standard linear regression is that the data are not necessarily independent and not necessarily identically distributed. One defining characteristic of a time series is that it is a list of observations where the ordering matters. Ordering is very important because there is dependency and changing the order could change the meaning of the data.
+
+#conert time to datetime format
+Data['time']=pd.to_datetime(Data['time'],format=('%Y-%m-%d'))
+Data.info()
+
+plt.figure(figsize=(17,8))
+plt.plot(Data.feature)
+plt.show()
+
+plt.figure(figsize=(17,8))
+plt.plot(Data.feature)
+plt.axhline(y=np.mean(Data.feature),color='red')
+plt.axhline(y=np.min(Data.feature),color='green')
+plt.axhline(y=np.max(Data.feature),color='black')
+plt.grid(False)
+
+def plot_moving_average(series,window,plot_intervals=False,scale=1.96):
+    rolling_mean=series.rolling(window=window).mean()
+    plt.figure(figsize=(17,8))
+    plt.title('Moving average\n window size = {}'.format(window))
+    plt.plot(rolling_mean,'g',label='Rolling mean Trend')
+    #PLOT confidence interval for smoothed value :: 
+    if plot_intervals:
+        mae=mean_absolute_error(series[window:],rolling_mean[window:])
+        deviation=np.std(series[window:]-rolling_mean[window:])
+        lower_bound=rolling_mean-(mae+scale*deviation)
+        upper_bound=rolling_mean+(mae+scale*deviation)
+        plt.plot(upper_bound,'r--',label='Upper bound / lower bound')
+        plt.plot(lower_bound,'r--')
+    plt.plot(series[window:],label='Actual Value')
+    plt.legend(loc='best')
+    plt.grid(True)
+    
+
+plot_moving_average(Data.feature,30)
+plot_moving_average(Data.feature,30,plot_intervals=True)
+
+def tsplot(y,lags=None,figsize=(17,8),style='bmh'):
+    if not isinstance(y,pd.Series):
+        y=pd.Series(y)
+    with plt.style.context(style='bmh'):
+        fig=plt.figure(figsize=figsize)
+        layout=(2,2)
+        ts_ax=plt.subplot2grid(layout,(0,0),colspan=2)
+        acf_ax=plt.subplot2grid(layout,(1,0))
+        pacf_ax=plt.subplot2grid(layout,(1,1))
+        y.plot(ax=ts_ax)
+        p_value=sm.tsa.stattools.adfuller(y)[1]
+        ts_ax.set_title('Time series analysis Plots \nDickey Fuller:p={0:.5f}'.format(p_value))
+        smt.graphics.plot_acf(y,lags=lags,ax=acf_ax)
+        smt.graphics.plot_pacf(y,lags=lags,ax=pacf_ax)
+        plt.tight_layout()
+
+tsplot(Data.feature,lags=30)
+
+best_model=sm.tsa.statespace.SARIMAX(Data.feature,order=(1,0,1),seasonal_order=(1,0,5,2)).fit()
+print(best_model.summary())
+
+best_model=sm.tsa.statespace.SARIMAX(Data.feature,order=(1,1,1),seasonal_order=(1,0,1,7))
+#results=best_model.fit(disp=-1)
+#print(best_model.summary())
+
+#p,q,P,Q=result_table.parameter[0]
+p=1
+d=1
+q=1
+
+best_model_2=sm.tsa.statespace.SARIMAX(Data.feature,order=(p,d,q),
+                                     seasonal_order=(1,0,1,7)).fit(disp=-1)
+print(best_model_2.summary())
+
+s=7
+res=best_model_2.predict(start=Data.feature.shape[0],end=(Data.feature.shape[0]+39))
+print(mean_absolute_percentage_error(Data.feature[s+d:],best_model_2.fittedvalues[s+d:]))
+
+print(mean_absolute_percentage_error(Data.feature[s+d:],best_model_2.fittedvalues[s+d:]))
+
+from math import sqrt
+
+print(sqrt(mean_squared_error(Data.feature[s+d:],best_model_2.fittedvalues[s+d:])))
+
+df_2=pd.DataFrame(res, columns=['feature'])
+print(df_2)
+df_2.to_csv('submission.csv')
+
+#p,q,P,Q=result_table.parameter[0]
+p=1
+d=1
+q=0
+
+
+best_model_3=sm.tsa.statespace.SARIMAX(Data.feature,order=(p,d,q),
+                                     seasonal_order=(1,0,24,2)).fit()
+print(best_model_3.summary())
+
+s=7
+resk=best_model_3.predict(start=Data.feature.shape[0],end=(Data.feature.shape[0]+39))
+print(mean_absolute_percentage_error(Data.feature[s+d:],best_model_3.fittedvalues[s+d:]))
+
+plt.plot(Data.feature)
+plt.plot(resk, color='red')
+
+
+print(mean_absolute_percentage_error(Data.feature[s+d:],best_model_3.fittedvalues[s+d:]))
+
+from math import sqrt
+
+print(sqrt(mean_squared_error(Data.feature[s+d:],best_model_3.fittedvalues[s+d:])))
+
+#p,q,P,Q=result_table.parameter[0]
+p=1
+d=1
+q=1
+
+
+best_model_3=sm.tsa.statespace.SARIMAX(Data.feature,order=(p,d,q),
+                                     seasonal_order=(1,0,24,2)).fit()
+print(best_model_3.summary())
+
+s=7
+resk=best_model_3.predict(start=Data.feature.shape[0],end=(Data.feature.shape[0]+39))
+print(mean_absolute_percentage_error(Data.feature[s+d:],best_model_3.fittedvalues[s+d:]))
+
+plt.plot(Data.feature)
+plt.plot(resk, color='red')
+
+
+print(mean_absolute_percentage_error(Data.feature[s+d:],best_model_3.fittedvalues[s+d:]))
+
+from math import sqrt
+
+print(sqrt(mean_squared_error(Data.feature[s+d:],best_model_3.fittedvalues[s+d:])))
+
+df_3=pd.DataFrame(resk, columns=['feature'])
+print(df_3)
+df_3.to_csv('valsubmission.csv')
