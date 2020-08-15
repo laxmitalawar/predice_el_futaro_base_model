@@ -1,5 +1,3 @@
-# predice_el_futaro_base_model
-
 Import Libraries
 
 import pandas as pd
